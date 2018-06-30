@@ -1,0 +1,113 @@
+#!/bin/bash
+
+[ -z `which awk 2>&1 | grep bin` ] &&  sudo apt-get install gawk
+
+# A POSIX variable
+OPTIND=1         # Reset in case getopts has been used previously in the shell.
+
+# Initialize our own variables:
+csf_file=csf-uboot
+uboot_file=u-boot.imx
+uboot_file_name="${uboot_file%%.*}"
+output_file="${uboot_file_name}_erase.imx"
+
+clean_csf=0
+csf_generate=0
+dump_ivt=0
+
+show_help()
+{
+    echo "USAGE:"
+    echo "  -d dumping u-boot binary"
+    echo "  -c padding 0 with csf-uboot.bin file size to u-boot sign part"
+    echo "  -u specify u-boot file"
+    echo "  -s specify csf file"
+    echo "  -g generate signed u-boot file"
+    echo "Example:"
+    echo "  csf-sign -d (defalut u-boot file:u-boot.imx)"
+    echo "  csf-sign -c (defalut u-boot file:u-boot.imx)"
+    echo "  csf-sign -g (defalut csf file:u-boot.imx)"
+    echo "  csf-sign -d -u u-boot.imx"
+    echo "  csf-sign -c -u u-boot.imx"
+    echo "  csf-sign -g -s csf-uboot"
+}
+
+exit_program()
+{
+    echo "success."
+    exit 0
+}
+
+while getopts "h?cgdu:s:" opt; do
+    case "$opt" in
+    h|\?)
+        show_help
+        exit 0
+        ;;
+    c)  clean_csf=1
+        ;;
+    u)  uboot_file=$OPTARG
+        uboot_file_name="${uboot_file%%.*}"
+        ;;
+    s)  csf_file=$OPTARG
+        csf_file="${csf_file%%.*}"
+        ;;
+    g)  csf_generate=1
+        ;;
+    d)  dump_ivt=1
+        ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
+[ "${1:-}" = "--" ] && shift
+
+# End of file
+
+if [ ${clean_csf} -eq 1 ]; then
+    echo "uboot_file='${uboot_file}'"
+    echo "uboot_file_name='${uboot_file_name}'"
+
+    output_file="${uboot_file_name}_erase.imx"
+    echo "output_file='${output_file}'"
+
+    csf_binSize=`find * -iname ${csf_file}.bin | xargs ls -al | awk '{print $5}'`
+    echo "CSF bin file Size: ${csf_binSize}"
+    
+    [ -e ${output_file} ] && rm -v ${output_file}
+    cat ${uboot_file} >> ${output_file}
+    dd if=/dev/zero bs=1 count=${csf_binSize} >> ${output_file}
+
+    exit_program
+fi
+
+if [ ${csf_generate} -eq 1 ]; then
+    echo "csf file name '${csf_file}'"
+    csf_output_file="${csf_file}.bin"
+    echo "csf file output_file '${csf_output_file}'"
+
+    rm ${csf_output_file}
+    csf_bin_info=`./bin/cst -o ${csf_output_file} -i ${csf_file}`
+
+    echo "uboot_file='${uboot_file}'"
+    echo "uboot_file_name='${uboot_file_name}'"
+
+    output_file="${uboot_file_name}-signed.imx"
+    echo "output_file='${output_file}'"
+    [ -e ${output_file} ] && rm -v ${output_file}
+    cat ${uboot_file} ${csf_output_file} > ${output_file}
+
+    exit_program
+fi
+
+if [ ${dump_ivt} -eq 1 ]; then
+    ivt_info=`od -X -N 0x20 ${uboot_file}`
+    echo ${ivt_info}
+    echo "IVT address: `echo ${ivt_info} | awk '{printf("0x%X", strtonum("0x"$8))}'`"
+    echo `echo ${ivt_info} | awk '{len=(strtonum("0x"$9)-strtonum("0x"$8))} END {printf("Image length: 0x%X", len)}'`
+
+    exit_program
+fi
+
+show_help
