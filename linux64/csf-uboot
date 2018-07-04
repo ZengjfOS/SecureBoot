@@ -27,4 +27,8 @@ File= "../crts/IMG1_1_sha256_2048_65537_v3_usr_crt.pem"
 Verification index = 2
 # Address Offset Length Data File Path
 # Blocks = 0x177fb000 0x000 0x48000 "u-boot.imx"
-Blocks = 0x177ff400 0x00000000 0x00084c00 "u-boot.imx"
+Blocks = 0x00910000 0x0000002c 0x000002f0 "u-boot.imx",\
+	0x177ff400 0x00000000 0x00076c00 "u-boot.imx"
+[Unlock]
+Engine = CAAM
+Features = RNG	

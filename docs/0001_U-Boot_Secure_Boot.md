@@ -206,7 +206,7 @@
   fuse prog 3 6 0xA62BC0D8
   fuse prog 3 7 0x1E950925
   ```
-* U-Boot编译输出信息，注意这里的HAB Blocks信息，csf file最后一行需要这里的信息
+* U-Boot编译输出信息，注意这里的HAB Blocks信息，csf file最后一行需要这里的信息，Make加上V=1参数才能看到信息
   ```
   [...省略]
     ./tools/mkimage -n board/freescale/mx6sabresd/mx6dlsabresd.cfg.cfgtmp -T imximage -e 0x17800000 -d u-boot.bin u-boot.imx

@@ -6,55 +6,58 @@
 OPTIND=1         # Reset in case getopts has been used previously in the shell.
 
 # Initialize our own variables:
-csf_file=csf-uboot
-uboot_file=u-boot.imx
-uboot_file_name="${uboot_file%%.*}"
-output_file="${uboot_file_name}_erase.imx"
+uboot_csf_file=csf-uboot                # csf file for u-boot
+uboot_file=u-boot.imx                   # default u-boot file
+uboot_file_name="${uboot_file%%.*}"     # default u-boot file name
 
-clean_csf=0
-csf_generate=0
-dump_ivt=0
+zImage_csf_file=csf-zImage              # csf file for zImage
+zImage_file=zImage                      # default kernel file
 
-show_help()
+csf_generate=0                          # csf generate flag
+generate_cmd=u                           # default generate command
+
+showHelp()
 {
-    echo "USAGE:"
-    echo "  -d dumping u-boot binary"
-    echo "  -c padding 0 with csf-uboot.bin file size to u-boot sign part"
-    echo "  -u specify u-boot file"
-    echo "  -s specify csf file"
-    echo "  -g generate signed u-boot file"
-    echo "Example:"
-    echo "  csf-sign -d (defalut u-boot file:u-boot.imx)"
-    echo "  csf-sign -c (defalut u-boot file:u-boot.imx)"
-    echo "  csf-sign -g (defalut csf file:u-boot.imx)"
-    echo "  csf-sign -d -u u-boot.imx"
-    echo "  csf-sign -c -u u-boot.imx"
-    echo "  csf-sign -g -s csf-uboot"
+    cat << EOF
+USAGE:
+  -u specify u-boot file
+  -u specify zImage file
+  -g generate file
+    c padding 0 with csf-uboot.bin file size to u-boot sign part
+    r remove generate all file
+    d dump u-boot ivt info
+    z sign zImage
+    mu sign MfgTool u-boot
+    nu sign normal u-boot 
+Example:
+  csf-sign -g d (defalut u-boot file:u-boot.imx)
+  csf-sign -g c (defalut u-boot file:u-boot.imx)
+  csf-sign -g mu (defalut csf file: csf-uboot)
+  csf-sign -g nu (defalut csf file: csf-uboot)
+  csf-sign -g z (defalut csf file: csf-zImage)
+  csf-sign -g r (defalut csf file: csf-zImage)
+EOF
 }
 
-exit_program()
+exitProgram()
 {
     echo "success."
     exit 0
 }
 
-while getopts "h?cgdu:s:" opt; do
+while getopts "h?cdg:u:s:" opt; do
     case "$opt" in
     h|\?)
-        show_help
+        showHelp
         exit 0
-        ;;
-    c)  clean_csf=1
         ;;
     u)  uboot_file=$OPTARG
         uboot_file_name="${uboot_file%%.*}"
         ;;
-    s)  csf_file=$OPTARG
-        csf_file="${csf_file%%.*}"
+    z)  zImage_file=$OPTARG
         ;;
     g)  csf_generate=1
-        ;;
-    d)  dump_ivt=1
+        generate_cmd=$OPTARG
         ;;
     esac
 done
@@ -63,51 +66,168 @@ shift $((OPTIND-1))
 
 [ "${1:-}" = "--" ] && shift
 
-# End of file
-
-if [ ${clean_csf} -eq 1 ]; then
-    echo "uboot_file='${uboot_file}'"
-    echo "uboot_file_name='${uboot_file_name}'"
+genCleanUboot()
+{
+    if [ ! -e "${uboot_file}" ]; then
+        echo "please ${uboot_file} exsit"
+        exit 1
+    fi
+    
+    
+    if [ ! -e "${uboot_csf_file}.bin" ]; then
+        echo "please ${uboot_csf_file}.bin exsit"
+        exit 1
+    fi
 
     output_file="${uboot_file_name}_erase.imx"
-    echo "output_file='${output_file}'"
-
-    csf_binSize=`find * -iname ${csf_file}.bin | xargs ls -al | awk '{print $5}'`
-    echo "CSF bin file Size: ${csf_binSize}"
+    csf_binSize=`find * -iname ${uboot_csf_file}.bin | xargs ls -al | awk '{print $5}'`
     
     [ -e ${output_file} ] && rm -v ${output_file}
     cat ${uboot_file} >> ${output_file}
     dd if=/dev/zero bs=1 count=${csf_binSize} >> ${output_file}
 
-    exit_program
-fi
+    cat << EOF
 
-if [ ${csf_generate} -eq 1 ]; then
-    echo "csf file name '${csf_file}'"
-    csf_output_file="${csf_file}.bin"
-    echo "csf file output_file '${csf_output_file}'"
+------------------------
+uboot file: '${uboot_file}', 
+file name: '${uboot_file_name}' 
+output file: '${output_file}' 
+CSF bin file Size: ${csf_binSize}
+EOF
+}
 
-    rm ${csf_output_file}
-    csf_bin_info=`./bin/cst -o ${csf_output_file} -i ${csf_file}`
+dumpIVT()
+{
+    ivt_info=`od -X -N 0x20 ${uboot_file}`
 
-    echo "uboot_file='${uboot_file}'"
-    echo "uboot_file_name='${uboot_file_name}'"
+    cat << EOF
+
+${ivt_info}
+IVT address: `echo ${ivt_info} | awk '{printf("0x%X", strtonum("0x"$8))}'`
+`echo ${ivt_info} | awk '{len=(strtonum("0x"$9)-strtonum("0x"$8))} END {printf("Image length: 0x%X", len)}'`
+EOF
+}
+
+removeAll()
+{
+    rm -rf \
+csf-uboot.bin \
+csf-zImage.bin \
+dcd_addr.bin \
+ivt.bin \
+u-boot_erase.imx \
+u-boot-pad.bin \
+u-boot-signed.imx \
+zImage_pad.bin \
+zImage_pad_ivt.bin \
+zImage_signed.bin \
+
+}
+
+# DCD address must be cleared for signature, as mfgtool will clear it.
+clear_dcd_addr()
+{
+    # store the DCD address
+    dd if=$1 of=dcd_addr.bin bs=1 count=4 skip=12
+    # generate a NULL address for the DCD
+    dd if=/dev/zero of=zero.bin bs=1 count=4
+    # replace the DCD address with the NULL address
+    dd if=zero.bin of=$1 seek=12 bs=1 conv=notrunc
+}
+# DCD address must be set for mfgtool to localize the DCD table.
+set_dcd_addr()
+{
+    # restore the DCD address with the original address
+    dd if=dcd_addr.bin of=$1 seek=12 bs=1 conv=notrunc
+    rm zero.bin
+}
+
+signUboot()
+{
+
+    if [ ! -e "${uboot_file}" ]; then
+        echo "please ${uboot_file} exsit"
+        exit 1
+    fi
+
+    [ "$1" == "MfgTool" ] && clear_dcd_addr u-boot.imx
+
+    csf_output_file="${uboot_csf_file}.bin"
+    [ -e ${csf_output_file} ] && rm -v ${csf_output_file}
+    csf_bin_info=`./bin/cst -o ${csf_output_file} -i ${uboot_csf_file} || exit 1`
+
+    [ "$1" == "MfgTool" ] && set_dcd_addr u-boot.imx
 
     output_file="${uboot_file_name}-signed.imx"
-    echo "output_file='${output_file}'"
     [ -e ${output_file} ] && rm -v ${output_file}
     cat ${uboot_file} ${csf_output_file} > ${output_file}
 
-    exit_program
+    cat << EOF
+
+------------------------
+u-boot type: $1
+csf file name: ${uboot_csf_file}
+csf output file name: ${csf_output_file}
+uboot file: ${uboot_file}
+uboot file name: ${uboot_file_name}
+csf sign info: ${csf_bin_info}
+uboot output file: ${output_file}
+EOF
+}
+
+signzImage()
+{
+    zImage_file_size=`find -iname ${zImage_file} | xargs ls -al | grep "zImage$" | awk '{ printf("0x%X", $5) }'`
+    zImage_file_appended_size=`find -iname ${zImage_file} | xargs ls -al | grep "${zImage_file}$" | awk '{ if (($5 / strtonum("0x1000")) == 0) { printf("0x%X", $5); } else { printf("0x%X000", ($5 + 0x1000) / 0x1000);}}'`
+
+    objcopy -I binary -O binary --pad-to ${zImage_file_appended_size} --gap-fill=0x00 ${zImage_file} ${zImage_file}_pad.bin
+
+    # zengjf@/zengjf:~/zengjf/cst-3.0.1/linux64$ od -X -N 0x20 ivt.bin
+    # 0000000 412000d1 80800000 00000000 00000000
+    # 0000020 00000000 80eea000 80eea020 00000000
+    # 0000040
+    perl ./genIVT
+    cat ${zImage_file}_pad.bin ivt.bin > ${zImage_file}_pad_ivt.bin
+
+    csf_output_file="${zImage_csf_file}.bin"
+    [ -e ${csf_output_file} ] && rm -v ${csf_output_file}
+    csf_bin_info=`./bin/cst -o ${csf_output_file} -i ${zImage_csf_file} || exit 1`
+    
+    [ -e ${zImage_file}_signed.bin ] && rm -v ${zImage_file}_signed.bin
+    cat ${zImage_file}_pad_ivt.bin ${csf_output_file} > ${zImage_file}_signed.bin
+
+    cat << EOF
+
+------------------------
+zImage file size: ${zImage_file_size}
+zImage file appended size: ${zImage_file_appended_size}
+zImage padding file name: ${zImage_file}_pad.bin
+zImage padded ivt file name: ${zImage_file}_pad_ivt.bin
+csf file name: ${zImage_csf_file}
+csf output file name: ${csf_output_file}
+csf sign info: ${csf_bin_info}
+zImage output file: ${zImage_file}_signed.bin
+EOF
+}
+
+if [ ${csf_generate} -eq 1 ]; then
+
+    case "$generate_cmd" in
+    c)  genCleanUboot
+        ;;
+    d)  dumpIVT
+        ;;
+    r)  removeAll
+        ;;
+    "mu")  signUboot MfgTool
+        ;;
+    "nu")  signUboot Normal
+        ;;
+    "z")  signzImage
+        ;;
+    esac
+
+    exitProgram
 fi
 
-if [ ${dump_ivt} -eq 1 ]; then
-    ivt_info=`od -X -N 0x20 ${uboot_file}`
-    echo ${ivt_info}
-    echo "IVT address: `echo ${ivt_info} | awk '{printf("0x%X", strtonum("0x"$8))}'`"
-    echo `echo ${ivt_info} | awk '{len=(strtonum("0x"$9)-strtonum("0x"$8))} END {printf("Image length: 0x%X", len)}'`
-
-    exit_program
-fi
-
-show_help
+showHelp
