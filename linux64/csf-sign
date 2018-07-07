@@ -12,6 +12,7 @@ uboot_file_name="${uboot_file%%.*}"     # default u-boot file name
 
 zImage_csf_file=csf-zImage              # csf file for zImage
 zImage_file=zImage                      # default kernel file
+zImage_load_addr=0x12000000
 
 csf_generate=0                          # csf generate flag
 generate_cmd=u                           # default generate command
@@ -121,6 +122,9 @@ u-boot-signed.imx \
 zImage_pad.bin \
 zImage_pad_ivt.bin \
 zImage_signed.bin \
+${uboot_csf_file} \
+${zImage_csf_file} \
+genIVT
 
 }
 
@@ -150,13 +154,34 @@ signUboot()
         exit 1
     fi
 
-    [ "$1" == "MfgTool" ] && clear_dcd_addr u-boot.imx
+    [ -e "${uboot_csf_file}" ] && rm -v ${uboot_csf_file}
+    cp -v "templates/${uboot_csf_file}.tpl" "${uboot_csf_file}"
+
+    ivt_info=`od -X -N 0x20 ${uboot_file}`
+    ivt_address=`echo ${ivt_info} | awk '{printf("0x%X", strtonum("0x"$8))}'`
+    ivt_image_length=`echo ${ivt_info} | awk '{len=(strtonum("0x"$9)-strtonum("0x"$8))} END {printf("0x%X", len)}'`
+    dcd_length_H=`od -x -j 0x2d -N 1 u-boot.imx | awk '{print $2}'`
+    dcd_length_L=`od -x -j 0x2e -N 1 u-boot.imx | awk '{print $2}'`
+
+    if [ "$1" == "MfgTool" ]; then
+        clear_dcd_addr u-boot.imx
+        cat >> ${uboot_csf_file} << EOF
+Blocks = 0x00910000 0x0000002c 0x0000${dcd_length_H:2:2}${dcd_length_L:2:2} "u-boot.imx",\\
+    ${ivt_address} 0x00000000 ${ivt_image_length} "u-boot.imx"
+EOF
+    else
+        cat >> ${uboot_csf_file} << EOF
+Blocks = ${ivt_address} 0x00000000 ${ivt_image_length} "u-boot.imx"
+EOF
+    fi
 
     csf_output_file="${uboot_csf_file}.bin"
     [ -e ${csf_output_file} ] && rm -v ${csf_output_file}
     csf_bin_info=`./bin/cst -o ${csf_output_file} -i ${uboot_csf_file} || exit 1`
 
-    [ "$1" == "MfgTool" ] && set_dcd_addr u-boot.imx
+    if [ "$1" == "MfgTool" ]; then
+        set_dcd_addr u-boot.imx
+    fi
 
     output_file="${uboot_file_name}-signed.imx"
     [ -e ${output_file} ] && rm -v ${output_file}
@@ -177,15 +202,36 @@ EOF
 
 signzImage()
 {
-    zImage_file_size=`find -iname ${zImage_file} | xargs ls -al | grep "zImage$" | awk '{ printf("0x%X", $5) }'`
-    zImage_file_appended_size=`find -iname ${zImage_file} | xargs ls -al | grep "${zImage_file}$" | awk '{ if (($5 / strtonum("0x1000")) == 0) { printf("0x%X", $5); } else { printf("0x%X000", ($5 + 0x1000) / 0x1000);}}'`
+    zImage_file_size=`find -iname ${zImage_file} | grep "^./${zImage_file}$" | xargs ls -al | awk '{ printf("0x%X", $5) }'`
+    zImage_file_appended_size=`find -iname ${zImage_file} | grep "^./${zImage_file}$" | xargs ls -al | awk '{ if (($5 / strtonum("0x1000")) == 0) { printf("0x%X", $5); } else { printf("0x%X000", ($5 + 0x1000) / 0x1000);}}'`
 
     objcopy -I binary -O binary --pad-to ${zImage_file_appended_size} --gap-fill=0x00 ${zImage_file} ${zImage_file}_pad.bin
+
+    [ -e "${zImage_csf_file}" ] && rm -v ${zImage_csf_file}
+    cp -v "templates/${zImage_csf_file}.tpl" "${zImage_csf_file}"
+    cat >> ${zImage_csf_file} << EOF
+Blocks = ${zImage_load_addr} 0x0 `printf "0x%X" $((${zImage_file_appended_size} + 0x20))` "zImage_pad_ivt.bin"
+EOF
 
     # zengjf@/zengjf:~/zengjf/cst-3.0.1/linux64$ od -X -N 0x20 ivt.bin
     # 0000000 412000d1 80800000 00000000 00000000
     # 0000020 00000000 80eea000 80eea020 00000000
     # 0000040
+    [ -e "genIVT" ] && rm -v genIVT
+    cat >> genIVT << EOF
+#! /usr/bin/perl -w
+use strict;
+open(my \$out, '>:raw', 'ivt.bin') or die "Unable to open: \$!";
+print \$out pack("V", 0x412000D1); # Signature
+print \$out pack("V", ${zImage_load_addr}); # Load Address
+print \$out pack("V", 0x0); # Reserved
+print \$out pack("V", 0x0); # DCD pointer
+print \$out pack("V", 0x0); # Boot Data
+print \$out pack("V", `printf "0x%X" $((${zImage_load_addr} + ${zImage_file_appended_size}))`); # Self Pointer *ivt
+print \$out pack("V", `printf "0x%X" $((${zImage_load_addr} + ${zImage_file_appended_size} + 0x20))`); # CSF Pointer *csf
+print \$out pack("V", 0x0); # Reserved
+close(\$out);
+EOF
     perl ./genIVT
     cat ${zImage_file}_pad.bin ivt.bin > ${zImage_file}_pad_ivt.bin
 
