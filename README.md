@@ -15,6 +15,10 @@
 * https://www.nxp.com/docs/en/application-note/AN4581.pdf
 * https://www.nxp.com/webapp/Download?colCode=IMX_CST_TOOL&appType=license&location=null&Parent_nodeId=&Parent_pageType=
 
+## MfgTool
+
+[android_m6.0.1_2.1.0_ga_tool](https://github.com/ZengjfOS/MfgTool/tree/android6.0.1HABMfgTool)
+
 ## Sign Tool
 
 [linux64/csf-sign](linux64/csf-sign)
@@ -45,6 +49,7 @@ Example:
 
 * [docs/0002_Kernel_Secure_Boot.md](docs/0002_Kernel_Secure_Boot.md)
 * [docs/0001_U-Boot_Secure_Boot.md](docs/0001_U-Boot_Secure_Boot.md)
+* [Yocto MfgToo U-Boot Compile](https://github.com/ZengjfOS/Yocto/blob/master/docs/0006_MFGTool_U-Boot_In_Yocto_Receipe.md) 
 
 ## Typical U-Boot HAB Check Example
 
