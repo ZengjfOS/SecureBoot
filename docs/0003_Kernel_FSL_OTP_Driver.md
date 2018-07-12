@@ -18,7 +18,7 @@
 
 ## Build MfgTool Kernel
 
-* make menuconfig: `cd imx6q-x11/tmp/work/imx6dlsabresd-poky-linux-gnueabi/mfgtool-linux-imx/4.1.15-r0/build && make menuconfig`
+* make menuconfig: `cd imx6q-x11/tmp/work/imx6dlsabresd-poky-linux-gnueabi/mfgtool-linux-imx/4.1.15-r0/build && export ARCH=arm && make menuconfig`
   ```
    .config - Linux/arm 4.1.15 Kernel Configuration
    > Search (FSL_OTP) > Character devices qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq

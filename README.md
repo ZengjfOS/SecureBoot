@@ -48,6 +48,7 @@ Example:
 
 ## Work Note
 
+* [docs/0004_Dm-crypt.md](docs/0004_Dm-crypt.md)
 * [docs/0003_Kernel_FSL_OTP_Driver.md](docs/0003_Kernel_FSL_OTP_Driver.md)
 * [docs/0002_Kernel_Secure_Boot.md](docs/0002_Kernel_Secure_Boot.md)
 * [docs/0001_U-Boot_Secure_Boot.md](docs/0001_U-Boot_Secure_Boot.md)
