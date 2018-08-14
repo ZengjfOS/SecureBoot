@@ -10,6 +10,9 @@
 
 操作的时候先参考《AN4581.pdf》生成Key，签名的时候，可以使用[linux64/csf-sign](linux64/csf-sign)来进行签名。
 
+**Note：**  
+**`cst-3.0.1/release/docs/HAB4_API.pdf`的`6.7 Audit Events`章节有*Event*报错信息说明。在调试的阶段，可进行分析参考。**
+
 ## 参考文档
 
 * https://www.nxp.com/docs/en/application-note/AN4581.pdf
