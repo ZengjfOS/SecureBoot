@@ -18,6 +18,7 @@
 * https://www.nxp.com/docs/en/application-note/AN4581.pdf
 * https://www.nxp.com/webapp/Download?colCode=IMX_CST_TOOL&appType=license&location=null&Parent_nodeId=&Parent_pageType=
 * https://www.timesys.com/security/secure-boot-encrypted-data-storage/
+* **[High Assurance Boot (HAB) for dummies](https://boundarydevices.com/high-assurance-boot-hab-dummies/)**
 
 ## MfgTool
 
